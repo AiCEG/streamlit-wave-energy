@@ -5,6 +5,7 @@ from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 
+# Function to load all CSV files from a directory
 @st.cache_data
 def load_all_csv_from_folder(folder_path):
     csv_files = [f for f in os.listdir(folder_path) if f.endswith('.csv')]
@@ -14,7 +15,9 @@ def load_all_csv_from_folder(folder_path):
         data_frames[file] = df
     return data_frames
 
+# Function to perform PCA and plot results
 def perform_pca_and_plot(df, file_name):
+    # Discretize 'Total_Power' and encode labels
     total_power = df['Total_Power']
     min_power, max_power = total_power.min(), total_power.max()
     bin_width = (max_power - min_power) / 4
@@ -24,6 +27,7 @@ def perform_pca_and_plot(df, file_name):
     label_encoder = LabelEncoder()
     total_power_encoded = label_encoder.fit_transform(total_power_labels)
 
+    # Flatten coordinate pairs into separate observations
     num_coords = 49 if '49' in file_name else 100
     all_coords = []
     for i in range(1, num_coords + 1):
@@ -31,19 +35,24 @@ def perform_pca_and_plot(df, file_name):
         coords = df[[x_col, y_col]].values
         all_coords.extend(coords)
 
+    # Create a new DataFrame for PCA
     pca_df = pd.DataFrame(all_coords, columns=['X', 'Y'])
     pca_df['Total_Power_Label'] = total_power_encoded.repeat(num_coords)
 
+    # Standardizing the features
     features = pca_df.columns
     x = pca_df.loc[:, features].values
     x = StandardScaler().fit_transform(x)
 
+    # Performing PCA
     pca = PCA(n_components=2)
     principalComponents = pca.fit_transform(x)
     principalDf = pd.DataFrame(data=principalComponents, columns=['PC1', 'PC2'])
 
+    # Concatenate 'Total_Power_Label' with the principal components
     principalDf['Total_Power_Label'] = pca_df['Total_Power_Label'].values
 
+    # Plotting the results of PCA
     fig, ax = plt.subplots()
     for label, color in zip(range(len(labels)), ['b', 'g', 'r', 'c']):
         indicesToKeep = principalDf['Total_Power_Label'] == label
@@ -55,27 +64,32 @@ def perform_pca_and_plot(df, file_name):
     ax.legend()
     ax.grid()
 
+    # Plot title and labels
     plt.title(f'2 Component PCA for {file_name}')
     plt.xlabel('Principal Component 1')
     plt.ylabel('Principal Component 2')
 
+    # Display the plot
     st.pyplot(fig)
 
+    # Display explained variance
     st.write(f"Explained Variance Ratio of the first two components for {file_name}: {pca.explained_variance_ratio_}")
 
+# Load the CSV files
 folder_path = 'csv'
 data_frames = load_all_csv_from_folder(folder_path)
 
 st.title('Filterable Tables and PCA for WEF CSV Files')
 st.write('This app reads data from all WEF CSV files in the "csv" folder and allows you to filter the data for each file and view PCA results.')
 
+# Function to create filters
 def create_filters(df, prefix):
     filters = {}
     columns = df.columns.tolist()
 
     for col in columns:
         unique_values = df[col].unique()
-        if len(unique_values) < 10:
+        if len(unique_values) < 10:  # If there are too many unique values, we don't want a multiselect box
             filters[col] = st.sidebar.multiselect(f'Select {col}', unique_values, key=f"{prefix}_{col}")
         else:
             if pd.api.types.is_numeric_dtype(df[col]):
@@ -87,6 +101,7 @@ def create_filters(df, prefix):
 
     return filters
 
+# Display each CSV file in a separate table and perform PCA
 for file_name, df in data_frames.items():
     st.header(f'Data from {file_name}')
 
